@@ -261,3 +261,18 @@ To download, setup and perfom tests, run the following commands on Mac / Linux::
     pip install nose mock
     python run_tests.py
 
+Acknowledgements
+ * Zach Carter (zcarter)
+
+
+
+
+##[mightyspring.com](www.mightyspring.com)
+
+       __  ____      __   __         ____         _          
+      /  |/  (_)__ _/ /  / /___ __  / __/__  ____(_)__  ___ _
+     / /|_/ / / _ `/ _ \/ __/ // / _\ \/ _ \/ __/ / _ \/ _ `/
+    /_/  /_/_/\_, /_//_/\__/\_, / /___/ .__/_/ /_/_//_/\_, / 
+             /___/         /___/     /_/              /___/  
+
+
