@@ -11,10 +11,16 @@ from whiskeynode.edges import Edge
 from whiskeynode.terminals import outbound_node, bidirectional_list, inbound_list, bidirectional_list
 
 
+'''
+
+this is an example of finding friends of friends. The query is pretty borked because our 
+bidirectional friends terminal isn't directed, so we have to search for inbound and outbound relationsships
+
+'''
 
 
 class User(WhiskeyNode, Nameable):
-    COLLECTION_NAME =   'friendsoffriends_users'
+    COLLECTION_NAME =   'example_friendsoffriends_users'
     COLLECTION =        db[COLLECTION_NAME]
     FIELDS =            {
                             'name':unicode,
@@ -64,25 +70,44 @@ if __name__ == '__main__':
     #look at all george's friends, then look at all of their friends, then look at all of their friends, until kevin's id is returned
 
     while(True):
-        print 'friend_ids ', friend_ids
         #get friends
         friends_of_friend_ids = Edge.COLLECTION.find({
-                '$and':[
-                        {
-                            'name':'friends',
-                            'outboundCollection':User.COLLECTION_NAME,
-                            'outboundId':{'$in':friend_ids},
-                        },
-                        {
-                            'name':'friends',
-                            'outboundCollection':User.COLLECTION_NAME,
-                            'inboundId':{'$nin':friend_ids},
-                        }
+                '$or':[
+                    {
+                        '$and':[
+                            {
+                                'name':'friends',
+                                'outboundCollection':User.COLLECTION_NAME,
+                                'outboundId':{'$in':friend_ids},
+                            },
+                            {
+                                'name':'friends',
+                                'outboundCollection':User.COLLECTION_NAME,
+                                'inboundId':{'$nin':friend_ids},
+                            }
                         
-                    ]
+                        ]
+                    },
+                    {
+                        '$and':[
+                            {
+                                'name':'friends',
+                                'outboundCollection':User.COLLECTION_NAME,
+                                'inboundId':{'$in':friend_ids},
+                            },
+                            {
+                                'name':'friends',
+                                'outboundCollection':User.COLLECTION_NAME,
+                                'outboundId':{'$nin':friend_ids},
+                            }
+                        
+                        ]
+                    }
+                ]
+                
                     
             }).distinct('inboundId')
-        print 'found ', friends_of_friend_ids
+
         if len(friends_of_friend_ids) == 0:
             print '%s and %s are not connected' % (user_a.name, user_b.name)
             break
