@@ -16,7 +16,7 @@ from whiskeynode.terminals import outbound_node, outbound_list, inbound_list, bi
 # - User object, contains a list of activities
 #
 class User(WhiskeyNode, Nameable):
-    COLLECTION_NAME =   'users'
+    COLLECTION_NAME =   'example_activities_users'
     COLLECTION =        db[COLLECTION_NAME]
     FIELDS =            {
                             'name':unicode,
@@ -32,7 +32,7 @@ class User(WhiskeyNode, Nameable):
 # - Activity Object, contans a list of users that have this activity
 #
 class Activity(WhiskeyNode, Nameable):
-    COLLECTION_NAME =   'activities'
+    COLLECTION_NAME =   'example_activities_activities'
     COLLECTION =        db[COLLECTION_NAME]
     FIELDS =            {
                             'name':unicode,
