@@ -1,7 +1,7 @@
 whiskeynode
 ===========
 
-A graph ORM for MongoDB with a weak-reference cache.
+A graph ORM for MongoDB with a weak-reference application cache.
 
 ##Philosophy
 
