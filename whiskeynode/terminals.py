@@ -61,15 +61,14 @@ def inbound_list(   to_node_class,
                     attributes=None, 
                     sort_func=None, 
                     render=False, 
-                    edge_filter=None, 
-                    node_filter=None, 
+                    edge_filter=None,  
                     record_changes=False,
                     voteable=False,
                 ):
     if attributes is not None:
-        return partial(AttributedListOfNodesTerminal, to_node_class, INBOUND, inbound_name=inbound_name, attributes=attributes, sort_func=sort_func, render=render, edge_filter=edge_filter, node_filter=node_filter, record_changes=record_changes)
+        return partial(AttributedListOfNodesTerminal, to_node_class, INBOUND, inbound_name=inbound_name, attributes=attributes, sort_func=sort_func, render=render, edge_filter=edge_filter, record_changes=record_changes)
     else:
-        return partial(ListOfNodesTerminal,           to_node_class, INBOUND, inbound_name=inbound_name, render=render, node_filter=node_filter, record_changes=record_changes)
+        return partial(ListOfNodesTerminal,           to_node_class, INBOUND, inbound_name=inbound_name, render=render, record_changes=record_changes)
 
 def bidirectional_list( to_node_class, 
                         render=False, 
@@ -310,13 +309,12 @@ class NodeTerminal():
 
 class ListOfNodesTerminal():
 
-    def __init__(self, to_node_class, direction, origin_node, name, inbound_name = None, render=False, edge_filter=None, node_filter=None, record_changes=False, **kwargs): 
+    def __init__(self, to_node_class, direction, origin_node, name, inbound_name = None, render=False, edge_filter=None, record_changes=False, **kwargs): 
         self.activated = False
         self.name = inbound_name if inbound_name is not None else name
         self.original_name = name
         self.node = origin_node
         self.edge_filter = edge_filter
-        self.node_filter = node_filter
         self.record_changes = record_changes
         self.to_node_class = to_node_class
         self.terminaltype = TerminalType.LIST_OF_NODES
