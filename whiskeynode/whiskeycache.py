@@ -1,5 +1,6 @@
 from bson.objectid import ObjectId
 from operator import attrgetter
+from threading import Lock
 from whiskeynode.exceptions import WhiskeyCacheException
 import itertools
 import weakref
@@ -17,6 +18,8 @@ weakref.WeakSet.__len__ = weak_ref_len
 RAM = weakref.WeakValueDictionary()
 RAM_ALL = {} #'collectionName':weakSet
 
+lock = Lock()
+
 def from_cache(cls, data, dirty=True):
     try:
         return RAM[data['_id']]
@@ -25,34 +28,37 @@ def from_cache(cls, data, dirty=True):
 
 def clear_cache():
     ''' for testing '''
-    for key in RAM.keys():
-        try:
-            del RAM[key]
-        except KeyError:
-            pass
-    for key in RAM_ALL.keys():
-        try:
-            del RAM_ALL[key]
-        except KeyError:
-            pass
+    with lock:
+        for key in RAM.keys():
+            try:
+                del RAM[key]
+            except KeyError:
+                pass
+        for key in RAM_ALL.keys():
+            try:
+                del RAM_ALL[key]
+            except KeyError:
+                pass
     
 def remove(node):
-    try:
-        del RAM[node._id]
+    with lock:
         try:
-            RAM_ALL[node.COLLECTION_NAME].remove(node)
-        except KeyError:
+            del RAM[node._id]
+            try:
+                RAM_ALL[node.COLLECTION_NAME].remove(node)
+            except KeyError:
+                pass
+        except:
             pass
-    except:
-        pass
 
 def save(node):
     #print "SAVE %s  - %s" %(str(node), str(node.ENSURE_INDEXES))
-    RAM[node._id] = node
-    try:
-        RAM_ALL[node.COLLECTION_NAME].add(node)
-    except: #KeyError
-        RAM_ALL[node.COLLECTION_NAME] = weakref.WeakSet([node])
+    with lock:
+        RAM[node._id] = node
+        try:
+            RAM_ALL[node.COLLECTION_NAME].add(node)
+        except: #KeyError
+            RAM_ALL[node.COLLECTION_NAME] = weakref.WeakSet([node])
 
 def from_id(_id, collection_name):
     if _id in RAM:
@@ -62,7 +68,8 @@ def from_id(_id, collection_name):
         return None
 
 def from_ids(_ids):
-    l = [RAM[x] for x in _ids if x in RAM]
+    with lock:
+        l = [RAM[x] for x in _ids if x in RAM]
     return l
 
 def find_one(cls, query):
@@ -73,7 +80,8 @@ def find_one(cls, query):
     elif '_id' in query:
         return from_id(query['_id'], cls.COLLECTION_NAME)
     try:
-        l = list(RAM_ALL[cls.COLLECTION_NAME])
+        with lock:
+            l = list(RAM_ALL[cls.COLLECTION_NAME])
         for x in l:
             is_true = True
             for key in query.keys():
@@ -90,7 +98,8 @@ def find(cls, query, sort):
     ''' RETURNS SORTED HIGHEST TO LOWEST _id (most recent first)'''
     if query == {}:
         try:
-            l = list(RAM_ALL[cls.COLLECTION_NAME])
+            with lock:
+                l = list(RAM_ALL[cls.COLLECTION_NAME])
             return sorted([x for x in l], key=attrgetter('_id'), reverse=True)
         except KeyError:
             return []
@@ -123,17 +132,18 @@ def find(cls, query, sort):
         raise WhiskeyCacheException('Whiskey cache only supports the $in, and $gt paramaters, for deeper searches like [%s] use the COLLECTION' % str(query['_id']['$in']))
     try:
         return_values = set([])
-        search_set = list(RAM_ALL[cls.COLLECTION_NAME])
+        with lock:
+            search_set = list(RAM_ALL[cls.COLLECTION_NAME])
         for x in search_set:
             is_true = True
             for key in query.keys():
                 if key[0] == '$' and key != '$in':
-                    raise WhiskeyCacheException('Whiskey cache only supports the $in paramater, for deeper searches like [%s] use the COLLECTION' % str(query[key]))
+                    raise WhiskeyCacheException('Whiskey cache only supports the $in paramater, for deeper searches like [%s] with key [%s], use the COLLECTION' % (str(query[key],key)))
                 if type(query[key]) is dict:
                     try:
                         is_true = getattr(x, key, None) in query[key]['$in']
                     except KeyError:
-                        raise WhiskeyCacheException('Whiskey cache only supports the $in paramater, for deeper searches like [%s] use the COLLECTION' % str(query[key]))
+                        raise WhiskeyCacheException('Whiskey cache only supports the $in paramater, for deeper searches like [%s] with key [%s], use the COLLECTION' % (str(query[key],key)))
                 else:
                     is_true = getattr(x,key, None) == query[key]
                 if not is_true:
