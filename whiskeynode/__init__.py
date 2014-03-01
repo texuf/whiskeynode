@@ -21,6 +21,7 @@ environment = os.environ.get('ENVIRONMENT')
 save_id = 0
 
 
+
 #helper function for current user id
 def get_current_user_id():
     return None
@@ -176,25 +177,29 @@ class WhiskeyNode(object):
         else:
             cursor = cls.COLLECTION.find(query).sort(sort[0],sort[1]) #todo - take out the if else after fixing mongo mock
         class WhiskeyCursor():
-            def __init__(self, existing, cursor):
+            def __init__(self, existing, cursor, limit=0):
                 self.existing = existing
                 self.cursor = cursor
-                self._count = None
+                self.__count = None
+                self.__limit = limit
+                self.__retrieved = 0
             def __iter__(self):
                 ''' this will return the items in cache and the db sorted by _id, newest first '''
-                for d in cursor:
-                    if sort[1] == -1:
-                        while len(self.existing) > 0 and getattr(self.existing[0], sort[0]) > d.get(sort[0]):
+                if self.__limit == 0 or self.__retrieved < self.__limit:
+                    self.__retrieved = self.__retrieved + 1
+                    for d in cursor:
+                        if sort[1] == -1:
+                            while len(self.existing) > 0 and getattr(self.existing[0], sort[0]) > d.get(sort[0]):
+                                yield self.existing.popleft()
+                        else:
+                            while len(self.existing) > 0 and getattr(self.existing[0], sort[0]) < d.get(sort[0]):
+                                yield self.existing.popleft()
+                        if len(self.existing) > 0 and self.existing[0]._id == d['_id']:
                             yield self.existing.popleft()
-                    else:
-                        while len(self.existing) > 0 and getattr(self.existing[0], sort[0]) < d.get(sort[0]):
-                            yield self.existing.popleft()
-                    if len(self.existing) > 0 and self.existing[0]._id == d['_id']:
+                        else:
+                            yield whiskeycache.from_cache(cls, d, dirty=False)
+                    while len(self.existing) > 0:
                         yield self.existing.popleft()
-                    else:
-                        yield whiskeycache.from_cache(cls, d, dirty=False)
-                while len(self.existing) > 0:
-                    yield self.existing.popleft()
 
             def next(self):
                 """ return the next item in cursor, sorted by _id, newest first """
@@ -210,31 +215,33 @@ class WhiskeyNode(object):
             def count(self):
                 ''' NOTE - this count isn't exactly accurate
                     since we don't know how many items will already be in the cache, but it's pretty close '''
-                if self._count is None:
-                    #self._count = len(self.existing) + self.cursor.count()
-                    self._count = self.cursor.count() #we're only looking at what's actually in the db for now...
+                if self.__count is None:
+                    #self.__count = len(self.existing) + self.cursor.count()
+                    self.__count = self.cursor.count() #we're only looking at what's actually in the db for now...
                     for x in self.existing:
                         if x._is_new_local:
-                            self._count = self._count + 1
-                return self._count
+                            self.__count = self.__count + 1
+                return self.__count
+            def limit(self, limit):
+                self.__limit = self.cursor.limit = limit
+
             def __len__(self):
                 return self.count()
-        return WhiskeyCursor(existing, cursor)
+        return WhiskeyCursor(existing, cursor, limit)
 
 
     @classmethod
     def find_one(cls, query={}):
         '''Returns one node as a Node object or None.'''
         from_cache = whiskeycache.find_one(cls, query)
-        data = cls.COLLECTION.find_one(query, sort=[('_id',-1)])
-        if data is not None and from_cache is not None and data['_id'] > from_cache._id:
-            return whiskeycache.from_cache(cls, data, dirty=False)
-        elif from_cache is not None:
+        if from_cache is not None:
             return from_cache
-        elif data is not None:
-            return whiskeycache.from_cache(cls, data, dirty=False)
         else:
-            return None
+            data = cls.COLLECTION.find_one(query, sort=[('_id',-1)])
+            if data is not None:
+                return whiskeycache.from_cache(cls, data, dirty=False)
+            else:
+                return None
 
 
     @classmethod
@@ -426,13 +433,6 @@ class WhiskeyNode(object):
                   terminal.to_node_class.COLLECTION_NAME == edge.inboundCollection, 'bad edge removal'
             terminal.remove_outbound_edge(edge)
 
-    def remove_outbound_nodes(self):
-        ''' removes all outbound nodes attached to this node, usefull if a destructor needs to also remove it's children '''
-        for key, terminal in self.terminals.items():
-            if terminal.terminaltype == TerminalType.NODE:
-                if terminal.exists() and terminal.direction == 'OUTBOUND':
-                    terminal.get().remove()
-
     def render(self, render_terminals=True):
         data = self._to_dict()
         for field in self.DO_NOT_RENDER_FIELDS:
@@ -506,7 +506,6 @@ class WhiskeyNode(object):
             #save our terminals
             for name, terminal in self.terminals.items():
                 terminal.save(update_last_modified=update_last_modified, current_user_id=current_user_id, save_id=save_id)
-                
 
     def set_field(self, name, value):
         ''' for generically getting fields on a whiskey node '''
