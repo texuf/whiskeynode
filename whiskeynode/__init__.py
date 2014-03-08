@@ -506,6 +506,7 @@ class WhiskeyNode(object):
             #save our terminals
             for name, terminal in self.terminals.items():
                 terminal.save(update_last_modified=update_last_modified, current_user_id=current_user_id, save_id=save_id)
+        return self
 
     def set_field(self, name, value):
         ''' for generically getting fields on a whiskey node '''
