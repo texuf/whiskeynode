@@ -357,7 +357,7 @@ Check out [whiskeynode-login](https://github.com/texuf/whiskeynode-login) for a 
 
 
 ##Acknowledgements
- * Zach Carter ([zcarter](wwww.github.com/zcarter))
+ * Zach Carter ([zcarter](https://github.com/zcarter))
 
 
 
