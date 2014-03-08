@@ -3,6 +3,47 @@ whiskeynode
 
 A graph ORM for MongoDB with a weak-reference application cache.
 
+##Installation
+
+To use in your python project::
+
+```
+
+pip install -e git://github.com/texuf/whiskeynode.git#egg=whiskeynode
+```
+
+Install locally::
+
+```
+
+pip install -e git://github.com/texuf/whiskeynode.git#egg=whiskeynode
+```
+
+To download, setup and perfom tests, run the following commands on Mac / Linux::
+
+```
+
+get clone <repo>
+cd <reponame>
+virtualenv venv --distribute
+source venv/bin/activate
+python setup.py install
+pip install nose mock
+```
+
+To run tests:
+```
+
+python tests
+```
+
+TO run this examples:
+
+```
+
+python -c "execfile('examples/activities.py')"
+```
+
 ##Philosophy
 
 Whiskeynode forces you to strictly define your models and the relationships between them, and stores relationships in a graph like way. It is good for rapidly prototyping a project with nebulious or changing specifications and it's quick enough to run in a production environment. It should also ease the pain of migrating to another database, if the decision is made to go with something other than MongoDb
@@ -17,7 +58,7 @@ In this example we're going to create activities, create users, assign activitie
 
 ```
 
-from examples.helpers import Nameable
+from examples.helpers import Nameable, make_list
 from random import random
 from whiskeynode import WhiskeyNode
 from whiskeynode.db import db
@@ -102,10 +143,10 @@ activities = [
     Activity.from_name('x-ray vision'),
 ]
 
-print [x.name for x in users]
-print [x.name for x in activities]
->>>['George Carlin', 'Tom Waits', 'Bubba']
->>>['flying', 'comedy', 'enormous jaws', 'karate', 'hula hooping', 'knitting', 'x-ray vision']
+print 'Our users are', make_list(users)
+print 'Our activities are', make_list(activities)
+>>>Our users are John, George Carlin, Tom Waits and Bubba.
+>>>Our activities are dancing, flying, comedy, enormous jaws, karate, hula hooping, knitting and x-ray vision.
 ```
 
 
@@ -117,13 +158,16 @@ for user in users:
     index = len(activities)-1
     while(True):
         index = int(round(float(index) - random() * len(activities) /2.0 ))
-        if index < 0: break #mid statement break... ugh
-        user.activities.append(activities[index])
-    print '%s has been assigned the activities: ' % user.name, [x.name for x in user.activities]
+        if index >= 0: 
+            user.activities.append(activities[index])
+        else:
+            break
+    print user.name, 'started', make_list(user.activities)
 
-    >>>George Carlin has been assigned the activities:  ['flying', 'enormous jaws', 'karate', 'knitting']
-    >>>Tom Waits has been assigned the activities:  ['flying', 'karate', 'hula hooping']
-    >>>Bubba has been assigned the activities:  ['enormous jaws', 'knitting']
+>>>John started enormous jaws, knitting and dancing.
+>>>George Carlin started comedy and hula hooping.
+>>>Tom Waits started dancing, flying and karate.
+>>>Bubba started flying, karate and knitting.
 ```
 
 
@@ -132,24 +176,21 @@ So, let's explore the users activities and see who has what in common
 ```
 
 for user in users:
-    print '\nLets look at %s\'s activities...' % user.name
     for activity in user.activities:
-        print '%s shares the activity \'%s\' with: ' % (user.name, activity.name), [x.name for x in activity.users if x.name != user.name]
+        print user.name, 'does', activity.name, 'with', make_list([x for x in activity.users if x != user])
 
->>Lets look at George Carlin's activities...
->>George Carlin shares the activity 'flying' with:  ['Tom Waits']
->>George Carlin shares the activity 'enormous jaws' with:  ['Bubba']
->>George Carlin shares the activity 'karate' with:  ['Tom Waits']
->>George Carlin shares the activity 'knitting' with:  ['Bubba']
->>
->>Lets look at Tom Waits's activities...
->>Tom Waits shares the activity 'flying' with:  ['George Carlin']
->>Tom Waits shares the activity 'karate' with:  ['George Carlin']
->>Tom Waits shares the activity 'hula hooping' with:  []
->>
->>Lets look at Bubba's activities...
->>Bubba shares the activity 'enormous jaws' with:  ['George Carlin']
->>Bubba shares the activity 'knitting' with:  ['George Carlin']
+>>>John does enormous jaws with none.
+>>>John does knitting with Bubba.
+>>>John does dancing with Tom Waits.
+>>>George Carlin does comedy with none.
+>>>George Carlin does hula hooping with none.
+>>>Tom Waits does dancing with John.
+>>>Tom Waits does flying with Bubba.
+>>>Tom Waits does karate with Bubba.
+>>>Bubba does flying with Tom Waits.
+>>>Bubba does karate with Tom Waits.
+>>>Bubba does knitting with John.
+
 ```
 
 
@@ -157,10 +198,9 @@ for user in users:
 
 ```
 
-#first lets save all of our models
-tmp = map(lambda x: x.save(), users)
-tmp = map(lambda x: x.save(), activities)
-#then find all users with each activity in just two db queries
+users = map(lambda x: x.save(), users)
+activities = map(lambda x: x.save(), activities)
+
 for activity in activities:
     user_ids = Edge.COLLECTION.find(
                                 {
@@ -170,16 +210,17 @@ for activity in activities:
                                     'inboundId':activity._id
                                 }
                             ).distinct('outboundId')
-    print 'Users who have the activity \'%s\': ' % activity.name, \
-            [x.name for x in User.from_ids(user_ids)]
+    print 'Who is %s?' % activity.name, make_list(User.from_ids(user_ids))
 
->>>Users who have the activity 'flying':  ['Tom Waits', 'George Carlin']
->>>Users who have the activity 'comedy':  []
->>>Users who have the activity 'enormous jaws':  ['Bubba', 'George Carlin']
->>>Users who have the activity 'karate':  ['Tom Waits', 'George Carlin']
->>>Users who have the activity 'hula hooping':  ['Tom Waits']
->>>Users who have the activity 'knitting':  ['Bubba', 'George Carlin']
->>>Users who have the activity 'x-ray vision':  []
+>>>Who is dancing? Tom Waits and John.
+>>>Who is flying? Bubba and Tom Waits.
+>>>Who is comedy? George Carlin.
+>>>Who is enormous jaws? John.
+>>>Who is karate? Bubba and Tom Waits.
+>>>Who is hula hooping? George Carlin.
+>>>Who is knitting? Bubba and John.
+>>>Who is x-ray vision? none.
+
 ```
 
 
@@ -196,44 +237,69 @@ for activity in activities:
         if activity != a2 and random() > .75:
             activity.relatedAbilities.append(a2)
     activity.save()
-    print '\'%s\' is related to ' % activity.name, [x.name for x in activity.relatedAbilities]
+    print activity.name.capitalize(), 'is now related to', make_list(activity.relatedAbilities)
 
->>>'flying' is related to  ['x-ray vision', 'knitting', 'karate', 'enormous jaws']
->>>'comedy' is related to  ['karate']
->>>'enormous jaws' is related to  []
->>>'karate' is related to  ['comedy']
->>>'hula hooping' is related to  ['enormous jaws', 'flying']
->>>'knitting' is related to  ['hula hooping', 'enormous jaws', 'flying']
->>>'x-ray vision' is related to  ['hula hooping', 'comedy']
+>>>Dancing is now related to x-ray vision, hula hooping and enormous jaws.
+>>>Flying is now related to none.
+>>>Comedy is now related to knitting and enormous jaws.
+>>>Enormous jaws is now related to hula hooping.
+>>>Karate is now related to x-ray vision, knitting, hula hooping and enormous jaws.
+>>>Hula hooping is now related to flying.
+>>>Knitting is now related to hula hooping and dancing.
+>>>X-ray vision is now related to karate and dancing.
 ```
 
 
 Now find related users the slow way
 
 ```
-
 for user in users:
-    print '\nLooking for users with activities related to %s\'s activities ' % user.name, [x.name for x in user.activities]
+    print 'Looking for users with activities related to %s\'s activities' % user.name, make_list(user.activities)
     for activity in user.activities:
+        print activity.name.capitalize() ,'is related to', make_list(activity.relatedAbilities)
         for related_ability in activity.relatedAbilities:
-            if related_ability not in user.activities and len(related_ability.users) > 0:
-                print '\'%s\' is related to \'%s\', %s like(s) \'%s\'' % (
-                                            activity.name, 
-                                            related_ability.name, 
-                                            str([x.name for x in related_ability.users if x is not user]), 
-                                            related_ability.name
-                                        )
->>>Looking for users with activities related to George Carlin's activities  ['flying', 'enormous jaws', 'karate', 'knitting']
->>>'knitting' is related to 'hula hooping', ['Tom Waits'] like(s) 'hula hooping'
+            if related_ability not in user.activities:
+                print user.name, 'should do', related_ability.name, 'with', make_list(filter(lambda x: x != user, related_ability.users))
+            else:
+                print user.name, 'is already doing', related_ability.name, 'with', make_list(filter(lambda x: x != user, related_ability.users))
 
->>>Looking for users with activities related to Tom Waits's activities  ['flying', 'karate', 'hula hooping']
->>>'flying' is related to 'knitting', ['Bubba', 'George Carlin'] like(s) 'knitting'
->>>'flying' is related to 'enormous jaws', ['Bubba', 'George Carlin'] like(s) 'enormous jaws'
->>>'hula hooping' is related to 'enormous jaws', ['Bubba', 'George Carlin'] like(s) 'enormous jaws'
-
->>>Looking for users with activities related to Bubba's activities  ['enormous jaws', 'knitting']
->>>'knitting' is related to 'hula hooping', ['Tom Waits'] like(s) 'hula hooping'
->>>'knitting' is related to 'flying', ['Tom Waits', 'George Carlin'] like(s) 'flying'
+>>>Looking for users with activities related to John's activities enormous jaws, knitting and dancing.
+>>>Enormous jaws is related to hula hooping.
+>>>John should do hula hooping with George Carlin.
+>>>Knitting is related to hula hooping and dancing.
+>>>John should do hula hooping with George Carlin.
+>>>John is already doing dancing with Tom Waits.
+>>>Dancing is related to x-ray vision, hula hooping and enormous jaws.
+>>>John should do x-ray vision with none.
+>>>John should do hula hooping with George Carlin.
+>>>John is already doing enormous jaws with none.
+>>>Looking for users with activities related to George Carlin's activities comedy and hula hooping.
+>>>Comedy is related to knitting and enormous jaws.
+>>>George Carlin should do knitting with Bubba and John.
+>>>George Carlin should do enormous jaws with John.
+>>>Hula hooping is related to flying.
+>>>George Carlin should do flying with Bubba and Tom Waits.
+>>>Looking for users with activities related to Tom Waits's activities dancing, flying and karate.
+>>>Dancing is related to x-ray vision, hula hooping and enormous jaws.
+>>>Tom Waits should do x-ray vision with none.
+>>>Tom Waits should do hula hooping with George Carlin.
+>>>Tom Waits should do enormous jaws with John.
+>>>Flying is related to none.
+>>>Karate is related to x-ray vision, knitting, hula hooping and enormous jaws.
+>>>Tom Waits should do x-ray vision with none.
+>>>Tom Waits should do knitting with Bubba and John.
+>>>Tom Waits should do hula hooping with George Carlin.
+>>>Tom Waits should do enormous jaws with John.
+>>>Looking for users with activities related to Bubba's activities flying, karate and knitting.
+>>>Flying is related to none.
+>>>Karate is related to x-ray vision, knitting, hula hooping and enormous jaws.
+>>>Bubba should do x-ray vision with none.
+>>>Bubba is already doing knitting with John.
+>>>Bubba should do hula hooping with George Carlin.
+>>>Bubba should do enormous jaws with John.
+>>>Knitting is related to hula hooping and dancing.
+>>>Bubba should do hula hooping with George Carlin.
+>>>Bubba should do dancing with Tom Waits and John.
 ```
 
 
@@ -267,12 +333,14 @@ for user in users:
                                 }
                             )
     #print the result
-    print 'Users who have activities related to %s\'s  activities ' % user.name, \
-            [(User.from_id(x['outboundId']).name, Activity.from_id(x['inboundId']).name) for x in edge_cursor]
+    print 'Who has activities related to %s\'s  activities?' % user.name, \
+        make_list(['%s does %s' % (User.from_id(x['outboundId']).name, Activity.from_id(x['inboundId']).name) for x in edge_cursor])
 
->>>Users who have activities related to George Carlin's  activities  [('Tom Waits', 'hula hooping')]
->>>Users who have activities related to Tom Waits's  activities  [('George Carlin', 'knitting'), ('Bubba', 'knitting'), ('Bubba', 'enormous jaws'), ('George Carlin', 'enormous jaws')]
->>>Users who have activities related to Bubba's  activities  [('Tom Waits', 'flying'), ('George Carlin', 'flying'), ('Tom Waits', 'hula hooping')]
+
+>>>Who has activities related to John's  activities? George Carlin does hula hooping.
+>>>Who has activities related to George Carlin's  activities? John does enormous jaws, John does knitting, Tom Waits does flying, Bubba does flying and Bubba does knitting.
+>>>Who has activities related to Tom Waits's  activities? George Carlin does hula hooping, John does enormous jaws, John does knitting and Bubba does knitting.
+>>>Who has activities related to Bubba's  activities? John does dancing, George Carlin does hula hooping, John does enormous jaws and Tom Waits does dancing.
 ```
 
 
@@ -288,33 +356,8 @@ Check out [whiskeynode-login](https://github.com/texuf/whiskeynode-login) for a 
 
 
 
-##Installation
-
-To use in your python project::
-
-```
-
-pip install -e git://github.com/texuf/whiskeynode.git#egg=whiskeynode
-    test
-```
-
-
-To download, setup and perfom tests, run the following commands on Mac / Linux::
-
-```
-
-get clone <repo>
-cd <reponame>
-virtualenv venv --distribute
-source venv/bin/activate
-python setup.py install
-pip install nose mock
-python run_tests.py
-```
-
-
 ##Acknowledgements
- * Zach Carter (zcarter)
+ * Zach Carter [wwww.github.com/zcarter](zcarter)
 
 
 
