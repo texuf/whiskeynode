@@ -37,7 +37,7 @@ To run tests:
 python tests
 ```
 
-TO run this examples:
+To run this examples:
 
 ```
 
@@ -236,7 +236,7 @@ for activity in activities:
     for a2 in activities:
         if activity != a2 and random() > .75:
             activity.relatedAbilities.append(a2)
-    activity.save()
+    activity = activity.save()
     print activity.name.capitalize(), 'is now related to', make_list(activity.relatedAbilities)
 
 >>>Dancing is now related to x-ray vision, hula hooping and enormous jaws.
@@ -357,7 +357,7 @@ Check out [whiskeynode-login](https://github.com/texuf/whiskeynode-login) for a 
 
 
 ##Acknowledgements
- * Zach Carter [wwww.github.com/zcarter](zcarter)
+ * Zach Carter ([zcarter](wwww.github.com/zcarter))
 
 
 
