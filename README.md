@@ -128,12 +128,14 @@ What's going on here? John is an instance of a User, which has an outbound list 
 ```
 
 users = [
+    john,
     User.from_name('George Carlin'),
     User.from_name('Tom Waits'),
     User.from_name('Bubba'),
 ]
 
 activities = [
+    dancing,
     Activity.from_name('flying'),
     Activity.from_name('comedy'),
     Activity.from_name('enormous jaws'),
