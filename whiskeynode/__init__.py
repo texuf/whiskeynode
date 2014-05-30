@@ -3,6 +3,7 @@ from collections import deque
 from datetime import datetime
 from functools import partial
 from pprint import pformat
+from pprintpp import pprint
 from whiskeynode import whiskeycache
 from whiskeynode.db import db
 from whiskeynode.exceptions import (BadEdgeRemovalException,
@@ -96,7 +97,7 @@ class WhiskeyNode(object):
 
     check_errors = True #really speeds up initialization
 
-    def __init__(self, init_with=None, dirty=True, record_changes=False):
+    def __init__(self, init_with=None, dirty=True):
         if self.check_errors:
             assert self.__class__ != WhiskeyNode, 'WhiskeyNode is meant to be an abstract class'
         self._dict = init_with if init_with else {}  #why a variable here? store everything that we get out of mongo, so we don't have data loss
@@ -105,7 +106,6 @@ class WhiskeyNode(object):
         self._save_record = {}
         self._terminals = None
         self._traversals = None
-        self.record_changes = record_changes
         self.DO_NOT_RENDER_FIELDS.update(self.DEFAULT_DO_NOT_RENDER_FIELDS)
         self.DO_NOT_UPDATE_FIELDS.update(self.DEFAULT_DO_NOT_UPDATE_FIELDS)
         
@@ -162,37 +162,48 @@ class WhiskeyNode(object):
 
 
     @classmethod
-    def find(cls, query={}, limit=0, skip_cache=False, sort=None):
+    def find(cls, query={}, limit=0, skip_cache=False, sort=None, skip=0):
         '''
             Returns an iterator of whiskeynodes SORTED HIGHEST TO LOWEST _id (most recent first)
             all params are passed to pymongo except skip_cache - this allows you to make complex queries to mongodb
         ''' 
         if sort is None:
-            sort = ('_id', -1)
+            sort = [('_id', -1)]
+        else:
+            assert isinstance(sort, list) and len(sort) >= 1, 'sort should be a list of tuples'
+            assert isinstance(sort[0], tuple), 'sort should be a list of tuples'
 
         existing = deque( whiskeycache.find(cls, query, sort)) if not skip_cache else [] #grab the items we already have in RAM
         
         if limit > 0:
-            cursor = cls.COLLECTION.find(query, limit=limit).sort(sort[0],sort[1]) #otherwise, hit the db, todo, pass a $notin:_ids
+            cursor = cls.COLLECTION.find(query, limit=limit+skip).sort(sort) #otherwise, hit the db, todo, pass a $notin:_ids
         else:
-            cursor = cls.COLLECTION.find(query).sort(sort[0],sort[1]) #todo - take out the if else after fixing mongo mock
+            cursor = cls.COLLECTION.find(query).sort(sort) #todo - take out the if else after fixing mongo mock
         class WhiskeyCursor():
-            def __init__(self, existing, cursor, limit=0):
+            def __init__(self, existing, cursor, limit=0, skip=0):
                 self.existing = existing
                 self.cursor = cursor
                 self.__count = None
                 self.__limit = limit
                 self.__retrieved = 0
+                if skip > 0:
+                    skipped = 0
+                    for s in self:
+                        skipped += 1
+                        if skipped >= skip:
+                            self.__retrieved = 0
+                            break
             def __iter__(self):
                 ''' this will return the items in cache and the db sorted by _id, newest first '''
                 if self.__limit == 0 or self.__retrieved < self.__limit:
                     self.__retrieved = self.__retrieved + 1
                     for d in cursor:
-                        if sort[1] == -1:
-                            while len(self.existing) > 0 and getattr(self.existing[0], sort[0]) > d.get(sort[0]):
+                        #we need tiebreakers for items in cache vs items in the db, unfortunately we only tiebreak on the first item in a sort list
+                        if sort[0][1] == -1:
+                            while len(self.existing) > 0 and getattr(self.existing[0], sort[0][0]) > d.get(sort[0][0]):
                                 yield self.existing.popleft()
                         else:
-                            while len(self.existing) > 0 and getattr(self.existing[0], sort[0]) < d.get(sort[0]):
+                            while len(self.existing) > 0 and getattr(self.existing[0], sort[0][0]) < d.get(sort[0][0]):
                                 yield self.existing.popleft()
                         if len(self.existing) > 0 and self.existing[0]._id == d['_id']:
                             yield self.existing.popleft()
@@ -203,7 +214,10 @@ class WhiskeyNode(object):
 
             def next(self):
                 """ return the next item in cursor, sorted by _id, newest first """
-                d = self.cursor.next()
+                try:
+                    d = self.cursor.next()
+                except StopIteration:
+                    return self.existing.popleft()
                 if len(self.existing) > 0 and self.existing[0]._id > d['_id']:
                     self.cursor = itertools.chain([d], self.cursor)
                     return self.existing.popleft()
@@ -227,7 +241,7 @@ class WhiskeyNode(object):
 
             def __len__(self):
                 return self.count()
-        return WhiskeyCursor(existing, cursor, limit)
+        return WhiskeyCursor(existing, cursor, limit, skip)
 
 
     @classmethod
@@ -279,6 +293,10 @@ class WhiskeyNode(object):
 
     @classmethod
     def from_ids(cls, ids):
+        if len(ids) == 0:
+            return []
+        if not isinstance(ids[0], ObjectId):
+            ids = [ObjectId(x) for x in ids]
         to_query = []
         to_return = []
         for _id in ids:
@@ -449,13 +467,13 @@ class WhiskeyNode(object):
 
     def render_pretty(self, do_print=True, *args, **kwargs):
         rendr = self.render(*args, **kwargs)
-        r = pformat(rendr)
+        r = pprint(rendr)
         if do_print:
             print r
         else:
             return r
 
-    def save(self, update_last_modified=True, current_user_id = None, save_id=None):
+    def save(self, update_last_modified=True, current_user_id = None, save_id=None, save_terminals=True):
         if save_id is None:
             save_id = get_new_save_id()
 
@@ -465,9 +483,20 @@ class WhiskeyNode(object):
         if save_id not in self._save_record:
             self._save_record[save_id] = True #prevent infinite recursive loops
             data = self._to_dict()
-            terminal_changes = { k:v.terminalchanges for k,v in self.terminals.items() if len(v.terminalchanges)>0} if self.record_changes else {}
+
             is_saving = self._dirty or self._diff_dict(data)
+            #from logger import logger
+            #logger.debug(    '--------------- save ' + str(self) + " : " + str(data.get('name','')))
             if is_saving:
+
+                #for k in data:
+                #    if self._dict.get(k) is None or cmp(data[k], self._dict.get(k)) != 0:
+                #        try:
+                #            logger.debug(    '!! ' + k + " : " + str(data[k]) + " : " + str(self._dict.get(k)))
+                #        except UnicodeEncodeError:
+                #            logger.debug(    '!! ' + k + " : bad UnicodeEncodeError")
+
+
                 if self.check_errors:
                     assert self._id is not None and self._id != ''
                 if update_last_modified:
@@ -476,37 +505,24 @@ class WhiskeyNode(object):
                     assert self.COLLECTION_NAME != '_whiskeynode', 'COLLECTION_NAME has not ben defined for class %s' % self.__class__
 
                 #save to db
+                
+                #logger.debug('+++++++++++++++++ save ' + str(self) + " : " + str(data.get('name','')))
                 key = self.COLLECTION.save(data, safe=True)
                 self._dirty = False
                 self._is_new_local = False
                 #record changes in event if requested
-                if self.record_changes:
-                    from whiskeynode.events import WhiskeyEvent
-                    WhiskeyEvent.create(node=self, 
-                                        event_type='nodechange', 
-                                        data={
-                                                'newDict':data, 
-                                                'oldDict':self._dict, 
-                                                'terminalChanges':terminal_changes,
-                                            }, 
-                                        current_user_id=current_user_id)
+                self.on_save(new_dict=data, old_dict=self._dict)
                 #reset our current state
                 self._dict = data
 
-            elif len(terminal_changes) > 0:
-                from whiskeynode.events import WhiskeyEvent
-                WhiskeyEvent.create(node=self, 
-                                    event_type='nodechange', 
-                                    data={
-                                            'terminalChanges':terminal_changes,
-                                        }, 
-                                    current_user_id=current_user_id)
-
-
             #save our terminals
-            for name, terminal in self.terminals.items():
-                terminal.save(update_last_modified=update_last_modified, current_user_id=current_user_id, save_id=save_id)
+            if save_terminals:
+                for name, terminal in self.terminals.items():
+                    terminal.save(update_last_modified=update_last_modified, current_user_id=current_user_id, save_id=save_id)
         return self
+
+    def on_save(self, new_dict, old_dict):
+        pass
 
     def set_field(self, name, value):
         ''' for generically getting fields on a whiskey node '''
@@ -587,7 +603,7 @@ class WhiskeyNode(object):
                     partial(cls.__del_terminal, name=name)))
 
     def __get_terminal(self, name):
-        return self.terminals[name].get()
+        return self.terminals[name].get_self()
     def __set_terminal(self, value, name):
         return self.terminals[name].set(value)
     def __del_terminal(self, name):

@@ -30,52 +30,46 @@ IDID = 0
 def outbound_node(  to_node_class, 
                     create_on_request=False, 
                     render=False, 
-                    record_changes=False,
                     voteable=False,
                  ):
-    return partial(NodeTerminal, to_node_class, OUTBOUND, render=render, create_on_request=create_on_request, record_changes=record_changes)
+    return partial(NodeTerminal, to_node_class, OUTBOUND, render=render, create_on_request=create_on_request)
 
 def inbound_node(   to_node_class, 
                     inbound_name, 
                     render=False, 
-                    record_changes=False,
                     voteable=False,
                 ):
     ''' inbound nodes just grab the first node. if there could ever be more than one connection use a list '''
-    return partial(NodeTerminal, to_node_class, INBOUND, inbound_name=inbound_name, render=render, record_changes=record_changes)
+    return partial(NodeTerminal, to_node_class, INBOUND, inbound_name=inbound_name, render=render)
 
 def outbound_list(  to_node_class, 
                     render=False, 
                     attributes=None, 
                     sort_func=None, 
-                    record_changes=False,
                     voteable=False,
                  ):
     if attributes is not None:
-        return partial(AttributedListOfNodesTerminal, to_node_class, OUTBOUND, render=render, attributes=attributes, sort_func=sort_func, record_changes=record_changes)
+        return partial(AttributedListOfNodesTerminal, to_node_class, OUTBOUND, render=render, attributes=attributes, sort_func=sort_func)
     else:
-        return partial(ListOfNodesTerminal,           to_node_class, OUTBOUND, render=render, record_changes=record_changes)
+        return partial(ListOfNodesTerminal,           to_node_class, OUTBOUND, render=render)
 
 def inbound_list(   to_node_class, 
                     inbound_name, 
                     attributes=None, 
                     sort_func=None, 
                     render=False, 
-                    edge_filter=None,  
-                    record_changes=False,
                     voteable=False,
                 ):
     if attributes is not None:
-        return partial(AttributedListOfNodesTerminal, to_node_class, INBOUND, inbound_name=inbound_name, attributes=attributes, sort_func=sort_func, render=render, edge_filter=edge_filter, record_changes=record_changes)
+        return partial(AttributedListOfNodesTerminal, to_node_class, INBOUND, inbound_name=inbound_name, attributes=attributes, sort_func=sort_func, render=render)
     else:
-        return partial(ListOfNodesTerminal,           to_node_class, INBOUND, inbound_name=inbound_name, render=render, record_changes=record_changes)
+        return partial(ListOfNodesTerminal,           to_node_class, INBOUND, inbound_name=inbound_name, render=render)
 
 def bidirectional_list( to_node_class, 
                         render=False, 
-                        record_changes=False,
                         voteable=False,
                       ):
-    return partial(ListOfNodesTerminal, to_node_class, BIDIRECTIONAL, render=render, record_changes=record_changes)
+    return partial(ListOfNodesTerminal, to_node_class, BIDIRECTIONAL, render=render)
 
 '''
 class BaseTerminal():
@@ -115,15 +109,13 @@ class BaseTerminal():
 '''
 
 class NodeTerminal():
-    def __init__(self, to_node_class, direction, origin_node, name, inbound_name=None, render=False, create_on_request=False, record_changes=False ): #, inbound_edges, outbound_edges):
+    def __init__(self, to_node_class, direction, origin_node, name, inbound_name=None, render=False, create_on_request=False ): #, inbound_edges, outbound_edges):
         self.activated = False
         self.name = inbound_name if inbound_name is not None else name
         self.original_name = name
         self.node = origin_node
-        self.record_changes = record_changes
         self.to_node_class = to_node_class
         self.terminaltype = TerminalType.NODE
-        self.terminalchanges = []
         self.direction = direction
         self._render = render
         self._insave = False
@@ -189,6 +181,9 @@ class NodeTerminal():
     def exists(self):
         return self._edge != None or Edge.find(self.edge_query()).count() > 0
 
+    def get_self(self):
+        return self.get()
+
     def get(self):
         if self._to_node == None:
             self.get_edge()
@@ -196,7 +191,7 @@ class NodeTerminal():
                 self.set(self.to_node_class())
             elif self._edge:
                 self._to_node = self.to_node_class.from_id(self._get_to_node_id())
-                assert self._to_node is not None, 'to node should not be none'
+                assert self._to_node is not None, 'to node should not be none ' + str(self)
                 if self.direction == OUTBOUND:
                     self._to_node.add_inbound_edge(self.name, self._edge)
                 else:
@@ -256,7 +251,6 @@ class NodeTerminal():
                 self._edge.save(*args, **kwargs)
 
             self._insave = False
-        self.terminalchanges = []
 
     def set(self, value):
         assert self.direction == OUTBOUND, \
@@ -272,13 +266,6 @@ class NodeTerminal():
             self._to_node.remove_inbound_edge(self.name, self._edge)
 
         if self._edge:
-            if self.record_changes:
-                self.terminalchanges.append({
-                                            'terminalName':self.name,
-                                            'terminalAction':'removed',
-                                            'attributes':{},
-                                            'terminalNodeId':self._get_to_node_id()
-                                            })
             self._edge.remove()
             self._edge = None
             self._to_node = None
@@ -295,33 +282,22 @@ class NodeTerminal():
             self._to_node.add_inbound_edge(self.name, self._edge)
             self.activated = True
 
-            if self.record_changes:
-                self.terminalchanges.append({
-                                                'terminalName':self.original_name,
-                                                'terminalAction':'added',
-                                                'attributes':{},
-                                                'terminalNodeId':self._get_to_node_id()
-                                                })
-
-
 
 
 
 class ListOfNodesTerminal():
 
-    def __init__(self, to_node_class, direction, origin_node, name, inbound_name = None, render=False, edge_filter=None, record_changes=False, **kwargs): 
+    def __init__(self, to_node_class, direction, origin_node, name, inbound_name = None, render=False, **kwargs): 
         self.activated = False
         self.name = inbound_name if inbound_name is not None else name
         self.original_name = name
         self.node = origin_node
-        self.edge_filter = edge_filter
-        self.record_changes = record_changes
         self.to_node_class = to_node_class
         self.terminaltype = TerminalType.LIST_OF_NODES
-        self.terminalchanges = []
         self.direction = direction
         self._render = render
         self._insave = False
+        self._temp_yup_reference = [] #wanted to make appending o(1), so need to save a reference to the node so the whiskey weak reference cache doesn't drop it
 
         if self.direction == INBOUND and inbound_name == None:
             raise InvalidTerminalException('inbound_name cannot be none when direction is INBOUND')
@@ -343,15 +319,9 @@ class ListOfNodesTerminal():
         return len(self.get_edges())
 
     def __getitem__(self, i): 
-        if self.activated:
-            self.get()
-            return self._list[i]
-        else:
-            edge = Edge.find_one(self.edge_query())
-            if edge.inboundId == self.node._id:
-                return self.to_node_class.find_one({'_id':edge.outboundId})
-            else:
-                return self.to_node_class.find_one({'_id':edge.inboundId})
+        #if self.activated:
+        self.get()
+        return self._list[i]
 
 
     def __delitem__(self, i): 
@@ -366,20 +336,14 @@ class ListOfNodesTerminal():
 
         assert to_node.COLLECTION_NAME == self.to_node_class.COLLECTION_NAME, \
             'Terminal [%s] on [%s] takes [%s] not [%s]' % (self.name, self.node.__class__, self.to_node_class, to_node.__class__)
-        
         if not to_node._id in self.get_edges():
-            self.get()
             self._edges[to_node._id] = Edge.from_nodes(self.node, to_node, self.name, self.terminaltype)
             to_node.add_inbound_edge(self.name, self._edges[to_node._id])
-            self._list.append(to_node)
-            self.sort()
-            if self.record_changes:
-                self.terminalchanges.append({
-                                                'terminalName':self.original_name,
-                                                'terminalAction':'added',
-                                                'attributes':{},
-                                                'terminalNodeId':to_node._id,
-                                                })
+            if self._list is not None:
+                self._list.append(to_node)
+                self.sort()
+            else:
+                self._temp_yup_reference.append(to_node)
 
     def _remove_node(self, to_node):
         assert self.direction != INBOUND, \
@@ -396,23 +360,17 @@ class ListOfNodesTerminal():
             self._list.remove(to_node)
             self.sort()
 
-            if self.record_changes:
-                self.terminalchanges.append({
-                                                'terminalName':self.original_name,
-                                                'terminalAction':'removed',
-                                                'attributes':{},
-                                                'terminalNodeId':to_node._id,
-                                                })
 
     def add_inbound_edge(self, edge):
         assert self.direction != OUTBOUND
         #we have to add inbound nodes here so that we know a save will 
         #traverse all nodes and make the proper saves
-        self.get()
-        if edge.outboundId not in self._edges:
+        #self.get()
+        if edge.outboundId not in self.get_edges():
             self._edges[edge.outboundId] = edge
-            self._list.append(self.to_node_class.from_id(edge.outboundId))
-            self.sort()
+            if self._list is not None:
+                self._list.append(self.to_node_class.from_id(edge.outboundId))
+                self.sort()
 
     def add_outbound_edge(self, edge):
         pass #don't think we need to do anything here
@@ -426,6 +384,7 @@ class ListOfNodesTerminal():
 
     def delete(self):
         self.set([])
+        self._temp_yup_reference = []
 
     def edge_display_name(self):
         return '%s:%s' % (self.name, self.to_node_class.COLLECTION_NAME)
@@ -445,8 +404,6 @@ class ListOfNodesTerminal():
                 }
         else:
             raise NotImplementedError('direction %s is not supported' % direction)
-        if self.edge_filter != None:
-            rv.update(self.edge_filter)
         return rv
 
     def exists(self):
@@ -456,14 +413,15 @@ class ListOfNodesTerminal():
         for node in nodes:
             self._add_node(node)
 
+    def get_self(self):
+        return self
+
     def get(self):
-        #pulls everything out of the db, returns self
         if self._list is None:
             self.get_edges()
             self._list = self.to_node_class.from_ids(self._edges.keys())
             self.sort()
-        return self
-        
+
     def get_edge(self, node):
         #todo run edge_query with to_node
         return self.get_edges()[node._id]
@@ -476,11 +434,11 @@ class ListOfNodesTerminal():
             self.activated = True
 
             if self.direction == INBOUND or self.direction == BIDIRECTIONAL:
-                for edge in Edge.find(self.edge_query(INBOUND), skip_cache=self.edge_filter!=None, limit=200): #hack here, if there is an edge filter, skip the cache
+                for edge in Edge.find(self.edge_query(INBOUND), limit=200): #hack here, if there is an edge filter, skip the cache
                     self._edges[edge.outboundId] = edge
 
             if self.direction == OUTBOUND or self.direction == BIDIRECTIONAL:
-                for edge in Edge.find(self.edge_query(OUTBOUND), skip_cache=self.edge_filter!=None, limit=200): #hack here, if there is an edge filter, skip the cache
+                for edge in Edge.find(self.edge_query(OUTBOUND), limit=200): #hack here, if there is an edge filter, skip the cache
                     self._edges[edge.inboundId] = edge
                     #if self.check_errors
                     assert edge.inboundCollection == self.to_node_class.COLLECTION_NAME, \
@@ -537,8 +495,11 @@ class ListOfNodesTerminal():
                         node.save(*args, **kwargs) #saves shouldn't call the db if nothing has changed
                 for edge in self._edges.values():
                     edge.save(*args, **kwargs) #saves shouldn't call the db if nothing has changed
+            for node in self._temp_yup_reference:
+                node.save()
+            self._temp_yup_reference = []
             self._insave = False
-        self.terminalchanges = []
+
 
     def set(self, nodes):
         if type(nodes) != list:
@@ -605,16 +566,6 @@ class AttributedListOfNodesTerminal(ListOfNodesTerminal):
             else:
                 raise InvalidEdgeDataException('Edge attribute [%s] has not been explicitly defined for terminal [%s] in class [%s]' % (k, self.name, self.node.__class__))
 
-        if self.record_changes and len(changes) > 0:
-            self.terminalchanges.append({
-                                            'terminalName':self.original_name,
-                                            'terminalAction':'updated',
-                                            'attributes':changes,
-                                            'terminalNodeId':node._id,
-                                        })
-
-
-    
 
 
 

@@ -94,20 +94,28 @@ def find_one(cls, query):
         return None
 
 
+def _sort(dataset, sort):
+    if sort:
+        if len(sort) == 1:
+            return sorted(dataset, key=attrgetter(sort[0][0]), reverse=sort[0][1]==-1)
+        for sortKey, sortDirection in reversed(sort):
+            dataset = iter(sorted(dataset, key = attrgetter(sortKey), reverse = sortDirection < 0))
+    return dataset
+
 def find(cls, query, sort):
     ''' RETURNS SORTED HIGHEST TO LOWEST _id (most recent first)'''
     if query == {}:
         try:
             with lock:
                 l = list(RAM_ALL[cls.COLLECTION_NAME])
-            return sorted([x for x in l], key=attrgetter('_id'), reverse=True)
+            return _sort([x for x in l], sort)
         except KeyError:
             return []
     
-    if '$or' == query.keys()[0]:
+    if '$or' == query.keys()[0] and len(query) == 1:
         #can be optimized
         lol = [find(cls, x, sort) for x in query['$or']] #list of lists (lol)
-        return sorted(set(itertools.chain(*lol)), key=attrgetter(sort[0]), reverse=sort[1]==-1)
+        return _sort(set(itertools.chain(*lol)), sort)
     
     if '_id' in query:
         if type(query['_id']) is ObjectId:
@@ -120,12 +128,12 @@ def find(cls, query, sort):
             if len(keys) == 1:
                 if keys[0] == '$in':
                     ids = query['_id']['$in']
-                    return sorted([RAM[x] for x in ids if x in RAM], key=attrgetter(sort[0]), reverse=sort[1]==-1)
+                    return _sort([RAM[x] for x in ids if x in RAM], sort)
                 elif keys[0] == '$gt':
                     try:
                         l = list(RAM_ALL[cls.COLLECTION_NAME])
                         cmp_val = query['_id']['$gt']
-                        return sorted([x for x in l if x._id > cmp_val], key=attrgetter(sort[0]), reverse=sort[1]==-1)
+                        return _sort([x for x in l if x._id > cmp_val], sort)
                     except KeyError:
                         return []
 
@@ -138,19 +146,28 @@ def find(cls, query, sort):
             is_true = True
             for key in query.keys():
                 if key[0] == '$' and key != '$in':
-                    raise WhiskeyCacheException('Whiskey cache only supports the $in paramater, for deeper searches like [%s] with key [%s], use the COLLECTION' % (str(query[key],key)))
+                    raise WhiskeyCacheException('Whiskey cache only supports the $in paramater, for deeper searches like [%s] with key [%s], use the COLLECTION' % (str(query[key]),key))
                 if type(query[key]) is dict:
-                    try:
-                        is_true = getattr(x, key, None) in query[key]['$in']
-                    except KeyError:
-                        raise WhiskeyCacheException('Whiskey cache only supports the $in paramater, for deeper searches like [%s] with key [%s], use the COLLECTION' % (str(query[key],key)))
+                    query_keys = query[key].keys()
+                    supported = ('$in', '$ne', '$gt', '$nin')
+                    if len(query_keys) == 1 and query_keys[0] in supported:
+                        if query_keys[0] == '$in':
+                            is_true = getattr(x, key, None) in query[key]['$in']
+                        elif query_keys[0] == '$nin':
+                            is_true = getattr(x, key, None) not in query[key]['$nin']
+                        elif query_keys[0] == '$ne':
+                            is_true = getattr(x, key, None) != query[key]['$ne']
+                        elif query_keys[0] == '$gt':
+                            is_true = getattr(x, key, None) > query[key]['$gt']
+                    else:
+                        raise WhiskeyCacheException('Whiskey cache only supports the %s paramater, for deeper searches like [%s] with key [%s], use the COLLECTION' % (str(supported), str(query[key]),key))
                 else:
                     is_true = getattr(x,key, None) == query[key]
                 if not is_true:
                     break
             if is_true:
                 return_values.add(x)
-        return sorted(return_values, key=attrgetter(sort[0]), reverse=sort[1]==-1)
+        return _sort(return_values, sort)
     except KeyError:
         return []
 
