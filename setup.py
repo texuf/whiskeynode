@@ -20,7 +20,7 @@ setup(
       author='Austin Ellis',
       author_email='austinellis@gmail.com',
       py_modules=['whiskeynode'],
-      install_requires=['mongomock', 'pymongo'],
+      install_requires=['mongomock', 'pymongo', 'pprintpp'],
       scripts=[],
       namespace_packages=[]
       )
