@@ -186,6 +186,7 @@ class WhiskeyNode(object):
                 self.__count = None
                 self.__limit = limit
                 self.__retrieved = 0
+                self.__d = None
                 if skip > 0:
                     skipped = 0
                     for s in self:
@@ -194,37 +195,51 @@ class WhiskeyNode(object):
                             self.__retrieved = 0
                             break
             def __iter__(self):
-                ''' this will return the items in cache and the db sorted by _id, newest first '''
-                if self.__limit == 0 or self.__retrieved < self.__limit:
-                    self.__retrieved = self.__retrieved + 1
-                    for d in cursor:
-                        #we need tiebreakers for items in cache vs items in the db, unfortunately we only tiebreak on the first item in a sort list
-                        if sort[0][1] == -1:
-                            while len(self.existing) > 0 and getattr(self.existing[0], sort[0][0]) > d.get(sort[0][0]):
-                                yield self.existing.popleft()
-                        else:
-                            while len(self.existing) > 0 and getattr(self.existing[0], sort[0][0]) < d.get(sort[0][0]):
-                                yield self.existing.popleft()
-                        if len(self.existing) > 0 and self.existing[0]._id == d['_id']:
-                            yield self.existing.popleft()
-                        else:
-                            yield whiskeycache.from_cache(cls, d, dirty=False)
-                    while len(self.existing) > 0:
-                        yield self.existing.popleft()
+                return self
+
+            def __next__(self):
+                ''' python 3 '''
+                return self.next() 
 
             def next(self):
-                """ return the next item in cursor, sorted by _id, newest first """
-                try:
-                    d = self.cursor.next()
-                except StopIteration:
-                    return self.existing.popleft()
-                if len(self.existing) > 0 and self.existing[0]._id > d['_id']:
-                    self.cursor = itertools.chain([d], self.cursor)
-                    return self.existing.popleft()
-                elif len(self.existing) > 0 and self.existing[0]._id == d['_id']:
-                    return self.existing.popleft()
-                else:
-                    return whiskeycache.from_cache(cls, d, dirty=False)
+                ''' this will return the items in cache and the db'''
+                if self.__limit == 0 or self.__retrieved < self.__limit:
+                    self.__retrieved = self.__retrieved + 1
+                    if len(self.existing) >  0:
+                        if self.__d is None:
+                            try:
+                                self.__d = self.cursor.next()
+                            except StopIteration:
+                                return self.existing.popleft()
+                        d = self.__d
+                        attr_existing = getattr(self.existing[0], sort[0][0])
+                        attr_d = d.get(sort[0][0])
+                        if sort[0][1] == -1:
+                            if attr_existing > attr_d:
+                                return self.existing.popleft()
+                        else:
+                            if attr_existing < attr_d:
+                                return self.existing.popleft()
+
+                        if self.existing[0]._id == d['_id']:
+                            self.__d = None
+                            return self.existing.popleft()
+                        else:
+                            self.__d = None
+                            rv = whiskeycache.from_cache(cls, d, dirty=False)
+                            try:
+                                self.existing.remove(rv) #todo test to see if "rv in self.existing" is faster than try excepting
+                            except ValueError:
+                                pass
+                            return rv
+                    else:
+                        if self.__d:
+                            d = self.__d
+                            self.__d = None
+                            return whiskeycache.from_cache(cls, d, dirty=False)
+                        else:
+                            return whiskeycache.from_cache(cls, self.cursor.next(), dirty=False)
+                raise StopIteration()
 
             def count(self):
                 ''' NOTE - this count isn't exactly accurate
