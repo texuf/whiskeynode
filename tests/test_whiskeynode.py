@@ -329,7 +329,7 @@ class DocumentBaseTest(TestCase):
                         }
                     ).count() == 3
             )
-        '''
+        
         self.assertTrue(
                 D3.find(
                         {
@@ -343,7 +343,7 @@ class DocumentBaseTest(TestCase):
                         }
                     ).count() == 3
             )
-        '''
+        
         
     def test_skip(self):
         D3.COLLECTION.drop()
@@ -368,6 +368,8 @@ class DocumentBaseTest(TestCase):
             count += 1
 
         self.assertEqual(count, D_COUNT)
+
+
 
 
 
