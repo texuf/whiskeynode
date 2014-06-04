@@ -303,48 +303,79 @@ class DocumentBaseTest(TestCase):
         D3.COLLECTION.drop()
         whiskeycache.clear_cache()
         theese_dees = [D3({'myJaws':'big'}),D3({'myJaws':'small'}),D3({'myJaws':'just right'})]
-        self.assertTrue(
-                D3.find(
-                        {'myJaws':'big'}
-                    ).count() == 1
-            )
-        self.assertTrue(
-                D3.find(
-                        {
-                            '$or':[
-                                    {'myJaws':'big'},
-                                    {'myJaws':'small'},
-                                ]
-                        }
-                    ).count() == 2
-            )
-        self.assertTrue(
-                D3.find(
-                        {
-                            '$or':[
-                                    {'myJaws':'big'},
-                                    {'myJaws':'small'},
-                                    {'myJaws':'just right'},
-                                ]
-                        }
-                    ).count() == 3
-            )
-        
-        self.assertTrue(
-                D3.find(
-                        {
-                            'myJaws':'big',
-                            'someOtherVal':None,
-                            '$or':[
-                                    
-                                    {'myJaws':'small'},
-                                    {'myJaws':'just right'},
-                                ]
-                        }
-                    ).count() == 3
-            )
-        
-        
+#        self.assertTrue(
+#                D3.find(
+#                        {'myJaws':'big'}
+#                    ).count() == 1
+#            )
+#        self.assertTrue(
+#                D3.find(
+#                        {
+#                            '$or':[
+#                                    {'myJaws':'big'},
+#                                    {'myJaws':'small'},
+#                                ]
+#                        }
+#                    ).count() == 2
+#            )
+#        self.assertTrue(
+#                D3.find(
+#                        {
+#                            '$or':[
+#                                    {'myJaws':'big'},
+#                                    {'myJaws':'small'},
+#                                    {'myJaws':'just right'},
+#                                ]
+#                        }
+#                    ).count() == 3
+#            )
+        #
+#        self.assertTrue(
+#                D3.find(
+#                        {
+#                            'myJaws':'big',
+#                            'someOtherVal':None,
+#                            '$or':[
+#                                    {'myJaws':'big'},
+#                                    {'myJaws':'small'},
+#                                    {'myJaws':'just right'},
+#                                ]
+#                        }
+#                    ).count() == 3
+#            )
+        queries = [
+#                   {
+#                    'myJaws':'big',
+#                    'someOtherVal':None,
+#                    '$or':[
+                            
+#                            {'myJaws':'small'},
+#                            {'myJaws':'just right'},
+#                        ]
+#                }
+#                , {
+#                    'some_list':[],
+#                    '$or':[
+
+#                            {'myJaws':'small'},
+#                            {'myJaws':'just right'},
+#                        ]
+#                } ,
+                 {
+                    'some_dict':[],
+                    '$or':[
+                            
+                            {'myJaws':'big'},
+                            {'myJaws':'just right'},
+                        ]
+                }
+            ]
+        i = 1
+        for query in queries:
+            print str(i) + 'query'
+            self.assertEqual( D3.find( query ).count(), D3.COLLECTION.find().count())
+            i += 1
+
     def test_skip(self):
         D3.COLLECTION.drop()
         whiskeycache.clear_cache()

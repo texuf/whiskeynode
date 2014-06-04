@@ -111,12 +111,12 @@ def find(cls, query, sort):
             return _sort([x for x in l], sort)
         except KeyError:
             return []
-    
-    if '$or' == query.keys()[0] and len(query) == 1:
-        #can be optimized
-        lol = [find(cls, x, sort) for x in query['$or']] #list of lists (lol)
-        return _sort(set(itertools.chain(*lol)), sort)
-    
+
+#    if '$or' == query.keys()[0] and len(query) == 1:
+#        #  can be optimized
+#        lol = [find(cls, x, sort) for x in query['$or']]  #list of lists (lol)
+#        return _sort(set(itertools.chain(*lol)), sort)
+
     if '_id' in query:
         if type(query['_id']) is ObjectId:
             try:
@@ -143,10 +143,12 @@ def find(cls, query, sort):
         with lock:
             search_set = list(RAM_ALL[cls.COLLECTION_NAME])
         for x in search_set:
+            print "new doc"
             is_true = True
-            for key in query.keys():
-                if key[0] == '$' and key != '$in':
-                    raise WhiskeyCacheException('Whiskey cache only supports the $in paramater, for deeper searches like [%s] with key [%s], use the COLLECTION' % (str(query[key]),key))
+            for key in query:
+                print "query key is " + str(key)
+#                if key[0] == '$' and key != '$in':
+#                    raise WhiskeyCacheException('Whiskey cache only supports the $in paramater, for deeper searches like [%s] with key [%s], use the COLLECTION' % (str(query[key]),key))
                 if type(query[key]) is dict:
                     query_keys = query[key].keys()
                     supported = ('$in', '$ne', '$gt', '$nin')
@@ -161,12 +163,26 @@ def find(cls, query, sort):
                             is_true = getattr(x, key, None) > query[key]['$gt']
                     else:
                         raise WhiskeyCacheException('Whiskey cache only supports the %s paramater, for deeper searches like [%s] with key [%s], use the COLLECTION' % (str(supported), str(query[key]),key))
+                elif type(query[key]) is list:
+                    if key == '$or':
+                        valid_k_v = {}
+                        for d in query[key]:
+                            for k in d:
+                                if valid_k_v.get(k, None) == None:
+                                    valid_k_v[k] = []
+                                valid_k_v[k].append(d[k])
+                        is_true = any([getattr(x, k, None) in valid_k_v[k] for k in valid_k_v])
                 else:
                     is_true = getattr(x,key, None) == query[key]
                 if not is_true:
                     break
             if is_true:
+                print x.FIELDS
+                print "^ is valid"
+                print "we got here"
                 return_values.add(x)
+        print "length of return values"
+        print len(_sort(return_values, sort))
         return _sort(return_values, sort)
     except KeyError:
         return []
