@@ -112,11 +112,6 @@ def find(cls, query, sort):
         except KeyError:
             return []
 
-#    if '$or' == query.keys()[0] and len(query) == 1:
-#        #  can be optimized
-#        lol = [find(cls, x, sort) for x in query['$or']]  #list of lists (lol)
-#        return _sort(set(itertools.chain(*lol)), sort)
-
     if '_id' in query:
         if type(query['_id']) is ObjectId:
             try:
@@ -137,19 +132,20 @@ def find(cls, query, sort):
                     except KeyError:
                         return []
 
-        raise WhiskeyCacheException('Whiskey cache only supports the $in, and $gt paramaters, for deeper searches like [%s] use the COLLECTION' % str(query['_id']['$in']))
+        raise WhiskeyCacheException('Whiskey cache only supports the $in, and $gt parameters, for deeper searches like [%s] use the COLLECTION' % str(query['_id']['$in']))
     try:
+        valid_keys = ['$or', '$in']
         return_values = set([])
         with lock:
             search_set = list(RAM_ALL[cls.COLLECTION_NAME])
         for x in search_set:
-            print "new doc"
             is_true = True
             for key in query:
-                print "query key is " + str(key)
-#                if key[0] == '$' and key != '$in':
-#                    raise WhiskeyCacheException('Whiskey cache only supports the $in paramater, for deeper searches like [%s] with key [%s], use the COLLECTION' % (str(query[key]),key))
+                if key[0] == '$' and key not in valid_keys:
+                    raise WhiskeyCacheException('Whiskey cache only supports the $or and $in parameters, for deeper searches like [%s] with key [%s], use the COLLECTION' % (str(query[key]),key))
                 if type(query[key]) is dict:
+                    if query[key] == {}:
+                        is_true = getattr(x, key, None) == query[key]
                     query_keys = query[key].keys()
                     supported = ('$in', '$ne', '$gt', '$nin')
                     if len(query_keys) == 1 and query_keys[0] in supported:
@@ -162,8 +158,10 @@ def find(cls, query, sort):
                         elif query_keys[0] == '$gt':
                             is_true = getattr(x, key, None) > query[key]['$gt']
                     else:
-                        raise WhiskeyCacheException('Whiskey cache only supports the %s paramater, for deeper searches like [%s] with key [%s], use the COLLECTION' % (str(supported), str(query[key]),key))
+                        raise WhiskeyCacheException('Whiskey cache only supports the %s parameters, for deeper searches like [%s] with key [%s], use the COLLECTION' % (str(supported), str(query[key]),key))
                 elif type(query[key]) is list:
+                    if query[key] == []:
+                        is_true = getattr(x, key, None) == query[key]
                     if key == '$or':
                         valid_k_v = {}
                         for d in query[key]:
@@ -177,12 +175,7 @@ def find(cls, query, sort):
                 if not is_true:
                     break
             if is_true:
-                print x.FIELDS
-                print "^ is valid"
-                print "we got here"
                 return_values.add(x)
-        print "length of return values"
-        print len(_sort(return_values, sort))
         return _sort(return_values, sort)
     except KeyError:
         return []
