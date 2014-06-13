@@ -135,13 +135,7 @@ def find(cls, query, sort):
 
         key = query.keys()[0]
         for x in search_set:
-            #print " "
-            #print " "
-            #print "current query is %s" % str(query)
             is_true = True
-            
-            #print "key is %s" % str(key)
-            #print "value of %s is %s" % (str(key), str(query[key]))
             if type(query[key]) is dict:
                 if query[key] == {}:
                     is_true = getattr(x,key, None) == query[key]

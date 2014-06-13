@@ -345,7 +345,7 @@ class DocumentBaseTest(TestCase):
             print str(i) + 'query ' + str(query)
             self.assertEqual( len(whiskeycache.find(D3, query, [('_id', -1)] )), D3.COLLECTION.find(query).count())
             i += 1
-        
+
     def test_skip(self):
         D3.COLLECTION.drop()
         whiskeycache.clear_cache()
@@ -369,6 +369,8 @@ class DocumentBaseTest(TestCase):
             count += 1
 
         self.assertEqual(count, D_COUNT)
+
+
 
 
 
