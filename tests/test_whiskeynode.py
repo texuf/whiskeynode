@@ -1,6 +1,6 @@
 from bson.objectid import ObjectId
 from bson.dbref import DBRef
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import partial
 from unittest import TestCase
 from whiskeynode import WhiskeyNode
@@ -189,7 +189,7 @@ class DocumentBaseTest(TestCase):
             self.assertTrue(save_mock.call_count == 0)
 
         #print 'should save'
-        d1.lastModified = datetime.now()
+        d1.lastModified = datetime.now()+timedelta(seconds=1)
         self.assertTrue(d1._diff_dict(d1._to_dict()) or d1._dirty)
         with mock.patch('mongomock.Collection.save') as save_mock:
             d1.save()
@@ -303,47 +303,48 @@ class DocumentBaseTest(TestCase):
         D3.COLLECTION.drop()
         whiskeycache.clear_cache()
         theese_dees = [D3({'myJaws':'big'}),D3({'myJaws':'small'}),D3({'myJaws':'just right'})]
-        self.assertTrue(
-                D3.find(
-                        {'myJaws':'big'}
-                    ).count() == 1
-            )
-        self.assertTrue(
-                D3.find(
-                        {
-                            '$or':[
-                                    {'myJaws':'big'},
-                                    {'myJaws':'small'},
-                                ]
-                        }
-                    ).count() == 2
-            )
-        self.assertTrue(
-                D3.find(
-                        {
-                            '$or':[
-                                    {'myJaws':'big'},
-                                    {'myJaws':'small'},
-                                    {'myJaws':'just right'},
-                                ]
-                        }
-                    ).count() == 3
-            )
-        '''
-        self.assertTrue(
-                D3.find(
-                        {
-                            'myJaws':'big',
-                            'someOtherVal':None,
-                            '$or':[
-                                    
-                                    {'myJaws':'small'},
-                                    {'myJaws':'just right'},
-                                ]
-                        }
-                    ).count() == 3
-            )
-        '''
+        for d in theese_dees:
+            d.save()
+        queries = [
+                    {'myJaws':'big'
+
+                },
+                    {
+                     'myJaws':'big',
+                     'someOtherVal':None,
+                     '$or':[
+                          
+                             {'myJaws':'small'},
+                             {'myJaws':'just right'},
+                         ]
+                 }, 
+                 {
+                     '$or':[
+                             {'myJaws':'small'},
+                             {'myJaws':'just right'},
+                         ]
+                 },
+                  {
+                     'some_dict':[],
+                     '$or':[
+                           
+                             {'myJaws':'big'},
+                             {'myJaws':'just right'},
+                         ]
+                 },
+                  {
+                    '$or':[
+                            {'some_list':[]},
+                            {'some_dict':{}}
+                        ]
+                    }
+             ]
+        i = 1
+        for query in queries:
+            print '='*72
+            print str(i) + 'query ' + str(query)
+            self.assertEqual( len(whiskeycache.find(D3, query, [('_id', -1)] )), D3.COLLECTION.find(query).count())
+            i += 1
         
     def test_skip(self):
         D3.COLLECTION.drop()

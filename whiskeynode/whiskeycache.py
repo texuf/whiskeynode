@@ -103,73 +103,84 @@ def _sort(dataset, sort):
     return dataset
 
 def find(cls, query, sort):
-    ''' RETURNS SORTED HIGHEST TO LOWEST _id (most recent first)'''
-    if query == {}:
-        try:
-            with lock:
-                l = list(RAM_ALL[cls.COLLECTION_NAME])
-            return _sort([x for x in l], sort)
-        except KeyError:
-            return []
+    ''' find (should be mostly like pymongo find) '''
     
-    if '$or' == query.keys()[0] and len(query) == 1:
-        #can be optimized
-        lol = [find(cls, x, sort) for x in query['$or']] #list of lists (lol)
-        return _sort(set(itertools.chain(*lol)), sort)
-    
-    if '_id' in query:
-        if type(query['_id']) is ObjectId:
+    def search(search_set, query):
+        return_values = set([])
+        if query == {}:
             try:
-                return [RAM[query['_id']]]
+                l = list(RAM_ALL[cls.COLLECTION_NAME])
+                return [x for x in l]
             except KeyError:
                 return []
-        if type(query['_id']) is dict:
-            keys = query['_id'].keys()
-            if len(keys) == 1:
-                if keys[0] == '$in':
-                    ids = query['_id']['$in']
-                    return _sort([RAM[x] for x in ids if x in RAM], sort)
-                elif keys[0] == '$gt':
-                    try:
-                        l = list(RAM_ALL[cls.COLLECTION_NAME])
-                        cmp_val = query['_id']['$gt']
-                        return _sort([x for x in l if x._id > cmp_val], sort)
-                    except KeyError:
-                        return []
 
-        raise WhiskeyCacheException('Whiskey cache only supports the $in, and $gt paramaters, for deeper searches like [%s] use the COLLECTION' % str(query['_id']['$in']))
-    try:
-        return_values = set([])
-        with lock:
-            search_set = list(RAM_ALL[cls.COLLECTION_NAME])
+        if '_id' in query:
+            if not isinstance(query['_id'], dict):
+                try:
+                    return [RAM[query['_id']]]
+                except KeyError:
+                    return []
+
+        if '$or' == query.keys()[0] and len(query) == 1:
+            lol = [search(search_set, x) for x in query['$or']] #list of lists (lol)
+            return set(itertools.chain(*lol))
+
+        if '$and' == query.keys()[0] and len(query) == 1:
+            lol = [search(search_set, x) for x in query['$and']]
+            return set.intersection(*lol)
+
+        if len(query) > 1:
+            lol = [search(search_set, {k:v}) for k,v in query.items()]
+            return set.intersection(*lol)
+
+        key = query.keys()[0]
         for x in search_set:
+            #print " "
+            #print " "
+            #print "current query is %s" % str(query)
             is_true = True
-            for key in query.keys():
-                if key[0] == '$' and key != '$in':
-                    raise WhiskeyCacheException('Whiskey cache only supports the $in paramater, for deeper searches like [%s] with key [%s], use the COLLECTION' % (str(query[key]),key))
-                if type(query[key]) is dict:
-                    query_keys = query[key].keys()
-                    supported = ('$in', '$ne', '$gt', '$nin')
-                    if len(query_keys) == 1 and query_keys[0] in supported:
-                        if query_keys[0] == '$in':
-                            is_true = getattr(x, key, None) in query[key]['$in']
-                        elif query_keys[0] == '$nin':
-                            is_true = getattr(x, key, None) not in query[key]['$nin']
-                        elif query_keys[0] == '$ne':
-                            is_true = getattr(x, key, None) != query[key]['$ne']
-                        elif query_keys[0] == '$gt':
-                            is_true = getattr(x, key, None) > query[key]['$gt']
-                    else:
-                        raise WhiskeyCacheException('Whiskey cache only supports the %s paramater, for deeper searches like [%s] with key [%s], use the COLLECTION' % (str(supported), str(query[key]),key))
-                else:
+            
+            #print "key is %s" % str(key)
+            #print "value of %s is %s" % (str(key), str(query[key]))
+            if type(query[key]) is dict:
+                if query[key] == {}:
                     is_true = getattr(x,key, None) == query[key]
-                if not is_true:
                     break
+                query_keys = query[key].keys()
+                supported = ('$in', '$ne', '$gt', '$nin')
+                if len(query_keys) == 1 and query_keys[0] in supported:
+                    if query_keys[0] == '$in':
+                        is_true = getattr(x, key, None) in query[key]['$in']
+                    elif query_keys[0] == '$nin':
+                        is_true = getattr(x, key, None) not in query[key]['$nin']
+                    elif query_keys[0] == '$ne':
+                        is_true = getattr(x, key, None) != query[key]['$ne']
+                    elif query_keys[0] == '$gt':
+                        is_true = getattr(x, key, None) > query[key]['$gt']
+                else:
+                    raise WhiskeyCacheException('Whiskey cache only supports the %s paramater, for deeper searches like [%s] with key [%s], use the COLLECTION' % (str(supported), str(query[key]),key))
+            elif type(query[key]) is list:
+                if query[key] == []:
+                    is_true = getattr(x,key,None) == [] #com doesn't work for empty lists too well
+                else:
+                    is_true = cmp(query[key], getattr(x,key,None))
+                #print "is_true is " + str(is_true) + ' wanted: ' + str(query[key]) + ' got: ' + str(getattr(x,key,None))
+            else:
+                #print "Not a list or dict"
+                is_true = getattr(x,key, None) == query[key]
+            
             if is_true:
+                #print "APPEND"
                 return_values.add(x)
-        return _sort(return_values, sort)
+        
+        return return_values
+
+    try:
+        l = list(RAM_ALL[cls.COLLECTION_NAME])
     except KeyError:
         return []
+    else:
+        return _sort(search(l, query), sort) #i think i need the list here for weakref reasons
 
 def _quick_sort(values):
     pass
