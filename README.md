@@ -1,4 +1,5 @@
-.. image:: https://travis-ci.org/texuf/whiskeynode.png?branch=master
+
+![TravisCI](https://travis-ci.org/texuf/whiskeynode.png?branch=master)
 
 whiskeynode
 ===========
