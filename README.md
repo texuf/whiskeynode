@@ -1,3 +1,6 @@
+
+![TravisCI](https://travis-ci.org/texuf/whiskeynode.png?branch=master)
+
 whiskeynode
 ===========
 
@@ -5,14 +8,7 @@ A graph ORM for MongoDB with a weak-reference application cache.
 
 ##Installation
 
-To use in your python project::
-
-```
-
-pip install -e git://github.com/texuf/whiskeynode.git#egg=whiskeynode
-```
-
-Install locally::
+To use in your python project:
 
 ```
 
