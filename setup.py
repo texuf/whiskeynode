@@ -4,7 +4,7 @@ from setuptools import setup
 
 
 
-install_requires = ['mandrill']
+install_requires = ['mongomock', 'pymongo', 'pprintpp']
 if platform.python_version() < '2.7':
     install_requires.append('unittest2')
 
@@ -20,7 +20,7 @@ setup(
       author='Austin Ellis',
       author_email='austinellis@gmail.com',
       py_modules=['whiskeynode'],
-      install_requires=['mongomock', 'pymongo'],
+      install_requires=install_requires,
       scripts=[],
       namespace_packages=[]
       )

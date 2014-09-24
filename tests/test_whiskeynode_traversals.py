@@ -8,7 +8,6 @@ from whiskeynode import whiskeycache
 from whiskeynode.db import db
 from whiskeynode.edges import Edge
 from whiskeynode.exceptions import InvalidFieldNameException, FieldNameNotDefinedException
-from whiskeynode.events import WhiskeyEvent
 from whiskeynode.terminals import outbound_node, outbound_list, inbound_node, inbound_list
 from whiskeynode.terminaltypes import TerminalType
 from whiskeynode.traversals import lazy_traversal  

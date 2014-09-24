@@ -1,13 +1,12 @@
 from bson.objectid import ObjectId
 from bson.dbref import DBRef
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import partial
 from unittest import TestCase
 from whiskeynode import WhiskeyNode
 from whiskeynode import whiskeycache
 from whiskeynode.db import db
 from whiskeynode.exceptions import InvalidFieldNameException, FieldNameNotDefinedException
-from whiskeynode.events import WhiskeyEvent
 import mock
 
 #properties that aren't listed in fields shouldn'd save
@@ -92,15 +91,14 @@ class DocumentBaseTest(TestCase):
         self.assertTrue(c.count() == 0)
 
     def test_properties_save(self):
+        how_small = 'Very small.'
         
-        #d1 does have a property myJaws, but does not declare the field
         d1 = D1()
         d1.save()
         d1_returned = d1.COLLECTION.find_one({'_id':d1._id})
         self.assertTrue(d1_returned is not None)
         self.assertTrue(d1_returned.get('myJaws') is None)
         
-        #d1 does have a property and a field myJaws
         d2 = D2()
         d2.save()
 
@@ -145,6 +143,13 @@ class DocumentBaseTest(TestCase):
         d2 = D3.COLLECTION.find_one({'_id':d._id})
         self.assertTrue(d2['myJaws'] == how_big)
 
+    def test_ne(self):
+        how_big = 'So big.'
+        d = D3.from_dict({'myJaws':how_big})
+        
+        d2 = D3.find({'myJaws':{'$ne':'small'}})
+        self.assertTrue(d in list(d2))
+        
     def test_invalid_field_raises_error(self):
         try:
             d1 = DInvalid()
@@ -184,7 +189,7 @@ class DocumentBaseTest(TestCase):
             self.assertTrue(save_mock.call_count == 0)
 
         #print 'should save'
-        d1.lastModified = datetime.now()
+        d1.lastModified = datetime.now()+timedelta(seconds=1)
         self.assertTrue(d1._diff_dict(d1._to_dict()) or d1._dirty)
         with mock.patch('mongomock.Collection.save') as save_mock:
             d1.save()
@@ -293,46 +298,79 @@ class DocumentBaseTest(TestCase):
         self.assertFalse(from_ref2.myJaws == how_big)
         self.assertTrue(from_ref2.myJaws == even_bigger)
 
-    def test_record_changes(self):
-        count = WhiskeyEvent.COLLECTION.find().count()
-        D3.COLLECTION.drop()
-        d3 = D3(record_changes=True)
-        d3.myJaws = 'big'
-        d3.save()
-        self.assertTrue(WhiskeyEvent.COLLECTION.find().count() == count + 1)
-
 
     def test_or_query(self):
         D3.COLLECTION.drop()
         whiskeycache.clear_cache()
         theese_dees = [D3({'myJaws':'big'}),D3({'myJaws':'small'}),D3({'myJaws':'just right'})]
-        self.assertTrue(
-                D3.find(
-                        {'myJaws':'big'}
-                    ).count() == 1
-            )
-        self.assertTrue(
-                D3.find(
-                        {
-                            '$or':[
-                                    {'myJaws':'big'},
-                                    {'myJaws':'small'},
-                                ]
-                        }
-                    ).count() == 2
-            )
-        self.assertTrue(
-                D3.find(
-                        {
-                            '$or':[
-                                    {'myJaws':'big'},
-                                    {'myJaws':'small'},
-                                    {'myJaws':'just right'},
-                                ]
-                        }
-                    ).count() == 3
-            )
+        for d in theese_dees:
+            d.save()
+        queries = [
+                    {'myJaws':'big'
+
+                },
+                    {
+                     'myJaws':'big',
+                     'someOtherVal':None,
+                     '$or':[
+                          
+                             {'myJaws':'small'},
+                             {'myJaws':'just right'},
+                         ]
+                 }, 
+                 {
+                     '$or':[
+                             {'myJaws':'small'},
+                             {'myJaws':'just right'},
+                         ]
+                 },
+                  {
+                     'some_dict':[],
+                     '$or':[
+                           
+                             {'myJaws':'big'},
+                             {'myJaws':'just right'},
+                         ]
+                 },
+                  {
+                    '$or':[
+                            {'some_list':[]},
+                            {'some_dict':{}}
+                        ]
+                    }
+             ]
+        i = 1
+        for query in queries:
+            print '='*72
+            print str(i) + 'query ' + str(query)
+            self.assertEqual( len(whiskeycache.find(D3, query, [('_id', -1)] )), D3.COLLECTION.find(query).count())
+            i += 1
+
+    def test_skip(self):
+        D3.COLLECTION.drop()
+        whiskeycache.clear_cache()
+        theese_dees = [D3({'myJaws':'1'}),D3({'myJaws':'2'}),D3({'myJaws':'3'})]
+        self.assertEqual(D3.find({}, skip=2).count(), 1)
+        self.assertEqual(D3.find({}, sort=[('myJaws',1)], skip=2).next().myJaws, '3')
+        self.assertEqual(D3.find({}, skip=4).count(), 0)
         
-        
-        
+    def test_dequeue(self):
+        D3.drop()
+        dees = []
+        D_COUNT = 100
+        for i in range(D_COUNT):
+            d = D3({'myJaws':'so sweaty'})
+            d.save()
+            dees.append(d)
+
+        cursor = D3.find({}, sort=[('myJaws', 1)]) 
+        count = 0
+        for x in cursor:
+            count += 1
+
+        self.assertEqual(count, D_COUNT)
+
+
+
+
 
