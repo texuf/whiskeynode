@@ -3,6 +3,7 @@
 to run in python terminal:
 python -c "execfile('examples/activities.py')"
 '''
+from bson.code import Code
 from examples.helpers import Nameable, make_list
 from random import random
 from whiskeynode import WhiskeyNode
@@ -182,10 +183,28 @@ if __name__ == '__main__':
             make_list(['%s does %s' % (User.from_id(x['outboundId']).name, Activity.from_id(x['inboundId']).name) for x in edge_cursor])
 
 
+    print '\nPart 7: Using MongoDB Group aggregation to find users with common activites.'
+    comp_user = User.find_one() 
+    print "Finding users with activites in common with %s. \n%s's activities are: %s" %(comp_user.name, comp_user.name, str(make_list(comp_user.activities)))
 
+    #Hark! Javascript?! Tell the database to tally results; we initialize the count to zero when we make our group call.
+    reducer=Code("function(obj, result) {result.count+=1 }")
+    query = {
 
+                        'inboundId':{'$in':[act._id for act in list(comp_user.activities)]},
+                        'name':'activities',
+                        'outboundCollection':User.COLLECTION_NAME,
+                        'outboundId': {'$ne':comp_user._id},
+                    }
 
+    common_activities_users = Edge.COLLECTION.group(key=['outboundId'], 
+                                            condition=query,
+                                            initial={"count": 0},
+                                            reduce=reducer)
 
+    print common_activities_users
 
-
+    for cau in common_activities_users:
+        user = User.from_id(cau[0])
+        print '%s has %s activities in common with %s'
 
