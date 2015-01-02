@@ -369,7 +369,7 @@ common_activities_users = Edge.COLLECTION.group(key=['outboundId'],
                                         initial={"count": 0},
                                         reduce=reducer)
 
-
+#it is left as an exercise for the reader to improve on the below:
 for ag in activities_group:
     print '%s has %s activities in common with %s' %( User.from_id(ag['outboundId']).name, str(ag['count']), user.name)
 
