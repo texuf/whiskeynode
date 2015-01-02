@@ -205,6 +205,5 @@ if __name__ == '__main__':
     print common_activities_users
 
     for cau in common_activities_users:
-        user = User.from_id(cau[0])
-        print '%s has %s activities in common with %s'
+        print '%s has %s activities in common with %s'%(comp_user.name, cau['count'], User.from_id(cau['outboundId']).name)
 
