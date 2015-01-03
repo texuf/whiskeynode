@@ -247,6 +247,7 @@ for activity in activities:
 >>>X-ray vision is now related to karate and dancing.
 ```
 
+###Part 5: Using silly slow loops to find related users...
 
 Now find related users the slow way
 
@@ -303,6 +304,8 @@ for user in users:
 
 Woah! Three nested for loops? Loads of db calls that probably won't be cached in your application... lets see if we can do better
 
+###Part 6: Using Edge queries to find related users
+
 ```
 
 for user in users:
@@ -344,8 +347,36 @@ for user in users:
 
 That's better, hit the db 3 times for the graph traversal, then lookup the users and activities that are returned (this last line could be optimized to grab the objects in two calls over the wire)
 
-Well, that's all for now... Let me know what you think.
+###Part 7: Efficiently find users with common activites.
 
+What if we want to see who has the most activities in common with a particular user? Let's take advantage of MongoDB's group function to perform some fast aggregation on our edge collection.
+
+```
+
+comp_user = User.find_one()
+
+reducer=Code("function(obj, result) {result.count+=1 }")
+query = {
+
+                    'inboundId':{'$in':[act._id for act in list(user.activities)]},
+                    'name':'activities',
+                    'outboundCollection':User.COLLECTION_NAME,
+                    'outboundId': {'$ne':user._id},
+                }
+
+common_activities_users = Edge.COLLECTION.group(key=['outboundId'], 
+                                        condition=query,
+                                        initial={"count": 0},
+                                        reduce=reducer)
+
+#it is left as an exercise for the reader to improve on the below:
+for ag in activities_group:
+    print '%s has %s activities in common with %s' %( User.from_id(ag['outboundId']).name, str(ag['count']), user.name)
+
+
+```
+
+Well, that's all for now... Let me know what you think.
 
 ##Examples
 
